@@ -15,6 +15,13 @@
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
   <link rel="icon" type="image/png" href="icon-192.png" sizes="192x192">
   <style>
+    @font-face {
+      font-family: "Bebas Neue";
+      src: url("fonts/BebasNeue-latin.woff2") format("woff2");
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
     * { box-sizing: border-box; }
     html, body {
       margin: 0;
@@ -51,10 +58,16 @@
     .label {
       margin: 0;
       text-align: center;
-      font-size: clamp(1.15rem, 4.8vw, 2rem);
-      font-weight: 700;
-      letter-spacing: 0.01em;
-      line-height: 1.15;
+      font-family: "Bebas Neue", "Arial Narrow", Impact, sans-serif;
+      font-weight: 400;
+      font-synthesis: none;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+      /* Longest line is "Pause nach Runde 30" (~7.2em in Bebas Neue). */
+      font-size: min(calc((100vw - 36px) / 7.25), 12vh);
+      letter-spacing: 0.015em;
+      line-height: 0.92;
+      white-space: nowrap;
     }
     .sub {
       margin: 2px 0 0;
@@ -75,9 +88,11 @@
     }
     .time {
       display: inline-block;
-      font-weight: 800;
-      line-height: 0.86;
-      letter-spacing: -0.035em;
+      font-family: "Bebas Neue", "Arial Narrow", Impact, sans-serif;
+      font-weight: 400;
+      font-synthesis: none;
+      line-height: 0.9;
+      letter-spacing: 0.01em;
       font-variant-numeric: tabular-nums;
       font-feature-settings: "tnum" 1;
       white-space: nowrap;
@@ -193,7 +208,6 @@
         align-items: end;
       }
       .test { grid-column: auto; min-width: 8.5rem; }
-      .label { font-size: clamp(1rem, 4vh, 1.7rem); }
       .bar { margin-bottom: 8px; }
       body {
         padding-top: calc(4px + env(safe-area-inset-top));
@@ -654,12 +668,30 @@
       requestAnimationFrame(fitTime);
     }
 
+    function fitLabel() {
+      labelEl.style.fontSize = '';
+      var width = labelEl.clientWidth;
+      if (width < 20) return;
+      var range = document.createRange();
+      range.selectNodeContents(labelEl);
+      var textW = range.getBoundingClientRect().width;
+      if (textW <= width - 1) return;
+      var size = parseFloat(getComputedStyle(labelEl).fontSize);
+      var next = Math.floor(size * (width - 2) / textW);
+      if (next < 18) next = 18;
+      labelEl.style.fontSize = next + 'px';
+    }
+
     function fitTime() {
       if (fitLock) return;
+      fitLock = true;
+      fitLabel();
       var width = slotEl.clientWidth;
       var height = slotEl.clientHeight;
-      if (width < 16 || height < 16) return;
-      fitLock = true;
+      if (width < 16 || height < 16) {
+        fitLock = false;
+        return;
+      }
       var lo = 12;
       var hi = Math.ceil(Math.max(width, height));
       var best = lo;

@@ -1,15 +1,17 @@
-var CACHE = 'timer-v1';
+var CACHE = 'timer-v2';
 var ASSETS = [
   './index.html',
   './manifest.webmanifest',
   './apple-touch-icon.png',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './fonts/BebasNeue-latin.woff2'
 ];
 
 function guessType(url) {
   var path = String(url).split('?')[0];
   if (path.indexOf('.png') !== -1) return 'image/png';
+  if (path.indexOf('.woff2') !== -1) return 'font/woff2';
   if (path.indexOf('.webmanifest') !== -1) return 'application/manifest+json';
   if (path.indexOf('.js') !== -1) return 'text/javascript';
   return 'text/html; charset=utf-8';
