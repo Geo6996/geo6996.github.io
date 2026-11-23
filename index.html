@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#202124">
+  <meta name="description" content="Intervall-Timer für Runden und Pausen">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Timer">
+  <meta name="format-detection" content="telephone=no">
+  <title>Timer</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icon-192.png" sizes="192x192">
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      background: #202124;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-text-size-adjust: 100%;
+    }
+    html[data-mode="round"],
+    html[data-mode="round"] body { background: #1E8E3E; }
+    html[data-mode="pause"],
+    html[data-mode="pause"] body { background: #D93025; }
+    body {
+      position: fixed;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 100%;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      overscroll-behavior: none;
+      padding:
+        calc(8px + env(safe-area-inset-top))
+        calc(12px + env(safe-area-inset-right))
+        calc(10px + env(safe-area-inset-bottom))
+        calc(12px + env(safe-area-inset-left));
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      touch-action: manipulation;
+    }
+    .label {
+      margin: 0;
+      text-align: center;
+      font-size: clamp(1.15rem, 4.8vw, 2rem);
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      line-height: 1.15;
+    }
+    .sub {
+      margin: 2px 0 0;
+      text-align: center;
+      font-size: 1rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .sub:empty { display: none; }
+    .slot {
+      flex: 1 1 auto;
+      min-height: 0;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .time {
+      display: inline-block;
+      font-weight: 800;
+      line-height: 0.86;
+      letter-spacing: -0.035em;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+      white-space: nowrap;
+    }
+    .bar {
+      flex: 0 0 auto;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.28);
+      overflow: hidden;
+      margin: 6px 0 12px;
+    }
+    .fill {
+      height: 100%;
+      width: 0;
+      background: #fff;
+      border-radius: inherit;
+    }
+    .controls {
+      flex: 0 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    button, input {
+      font: inherit;
+      color: #fff;
+      touch-action: manipulation;
+    }
+    button {
+      appearance: none;
+      -webkit-appearance: none;
+      background: rgba(0, 0, 0, 0.18);
+      border: 2px solid rgba(255, 255, 255, 0.92);
+      border-radius: 14px;
+      min-height: 52px;
+      padding: 8px 8px;
+      font-size: 1rem;
+      font-weight: 700;
+      line-height: 1.15;
+    }
+    #btn-start { background: rgba(255, 255, 255, 0.2); }
+    button:disabled { opacity: 0.38; }
+    button:active:not(:disabled) {
+      transform: scale(0.98);
+      background: rgba(255, 255, 255, 0.34);
+      color: #161616;
+    }
+    button:focus-visible, input:focus-visible {
+      outline: 3px solid #fff;
+      outline-offset: 2px;
+    }
+    .settings {
+      flex: 0 0 auto;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+    body.is-session .settings { display: none; }
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-align: center;
+      line-height: 1.15;
+    }
+    input {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 100%;
+      min-height: 48px;
+      border-radius: 12px;
+      border: 2px solid rgba(255, 255, 255, 0.55);
+      background: rgba(255, 255, 255, 0.12);
+      font-size: 1.35rem;
+      font-weight: 800;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    input::-webkit-outer-spin-button,
+    input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .test { grid-column: 1 / -1; }
+    .nosleep {
+      position: fixed;
+      left: 0;
+      bottom: 0;
+      width: 1px;
+      height: 1px;
+      opacity: 0.01;
+      pointer-events: none;
+      z-index: -1;
+    }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    @media (orientation: landscape) {
+      .controls { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .settings {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+        align-items: end;
+      }
+      .test { grid-column: auto; min-width: 8.5rem; }
+      .label { font-size: clamp(1rem, 4vh, 1.7rem); }
+      .bar { margin-bottom: 8px; }
+      body {
+        padding-top: calc(4px + env(safe-area-inset-top));
+        padding-bottom: calc(6px + env(safe-area-inset-bottom));
+      }
+    }
+  </style>
+</head>
+<body>
+  <p id="label" class="label">Bereit</p>
+  <p id="sub" class="sub"></p>
+  <div id="slot" class="slot">
+    <div id="time" class="time" role="timer" aria-label="45 Sekunden">00:45</div>
+  </div>
+  <div id="bar" class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Fortschritt der Phase">
+    <div id="fill" class="fill"></div>
+  </div>
+  <div class="controls">
+    <button type="button" id="btn-start">Start</button>
+    <button type="button" id="btn-halt" disabled>Anhalten</button>
+    <button type="button" id="btn-skip" disabled>Phase überspringen</button>
+    <button type="button" id="btn-reset" disabled>Zurücksetzen</button>
+  </div>
+  <div class="settings" id="settings">
+    <label>Runden
+      <input id="rounds" type="number" inputmode="numeric" min="1" max="999" step="1" value="30" autocomplete="off">
+    </label>
+    <label>Runde (Sekunden)
+      <input id="round" type="number" inputmode="numeric" min="1" max="86400" step="1" value="45" autocomplete="off">
+    </label>
+    <label>Pause (Sekunden)
+      <input id="pause" type="number" inputmode="numeric" min="0" max="86400" step="1" value="15" autocomplete="off">
+    </label>
+    <button type="button" id="btn-test" class="test">Ton testen</button>
+  </div>
+  <p id="live" class="sr-only" aria-live="polite"></p>
+  <script>
+    var STORAGE_KEY = 'timer-settings';
+    var DEFAULTS = { rounds: 30, round: 45, pause: 15 };
+
+    var ROUND_BEEPS = [
+      { freq: 1040, dur: 0.15, gap: 0.1 },
+      { freq: 1040, dur: 0.15, gap: 0 }
+    ];
+    var PAUSE_TONES = [
+      { freq: 520, dur: 0.5, gap: 0.15 },
+      { freq: 520, dur: 0.5, gap: 0.15 },
+      { freq: 520, dur: 0.5, gap: 0 }
+    ];
+    var DONE_TONES = [
+      { freq: 660, dur: 0.5, gap: 0.15 },
+      { freq: 660, dur: 0.5, gap: 0.15 },
+      { freq: 660, dur: 0.5, gap: 0.15 },
+      { freq: 660, dur: 0.5, gap: 0 }
+    ];
+
+    /*
+      Silent clip for the iOS wake-lock fallback (muted, inline, looping video).
+      Copyright (c) Rich Tibbett — NoSleep.js, MIT License.
+      https://github.com/richtr/NoSleep.js
+    */
+    var NOSLEEP_SRC = 'data:video/mp4;base64,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';
+
+    var labelEl = document.getElementById('label');
+    var subEl = document.getElementById('sub');
+    var slotEl = document.getElementById('slot');
+    var timeEl = document.getElementById('time');
+    var barEl = document.getElementById('bar');
+    var fillEl = document.getElementById('fill');
+    var liveEl = document.getElementById('live');
+    var roundsEl = document.getElementById('rounds');
+    var roundEl = document.getElementById('round');
+    var pauseEl = document.getElementById('pause');
+    var btnStart = document.getElementById('btn-start');
+    var btnHalt = document.getElementById('btn-halt');
+    var btnSkip = document.getElementById('btn-skip');
+    var btnReset = document.getElementById('btn-reset');
+    var btnTest = document.getElementById('btn-test');
+
+    var state = 'idle';
+    var phases = [];
+    var phaseIndex = 0;
+    var phaseEndsAt = 0;
+    var pausedRemaining = 0;
+    var marks = { minute: 0, countdown: 0 };
+    var announced = '';
+    var barPct = -1;
+    var rafId = 0;
+    var intervalId = 0;
+    var fitLock = false;
+
+    var audioCtx = null;
+    var masterGain = null;
+    var activeOsc = [];
+
+    var wakeLock = null;
+    var wantWake = false;
+    var noSleepVideo = null;
+
+    function pad2(n) {
+      return (n < 10 ? '0' : '') + n;
+    }
+
+    function formatMs(ms) {
+      var total = ms <= 0 ? 0 : Math.ceil(ms / 1000);
+      var minutes = Math.floor(total / 60);
+      var seconds = total % 60;
+      return pad2(minutes) + ':' + pad2(seconds);
+    }
+
+    function spokenTime(ms) {
+      var total = ms <= 0 ? 0 : Math.ceil(ms / 1000);
+      var minutes = Math.floor(total / 60);
+      var seconds = total % 60;
+      var parts = [];
+      if (minutes === 1) parts.push('1 Minute');
+      else if (minutes > 1) parts.push(minutes + ' Minuten');
+      if (seconds === 1) parts.push('1 Sekunde');
+      else if (seconds !== 0 || minutes === 0) parts.push(seconds + ' Sekunden');
+      return parts.join(' ');
+    }
+
+    function buildPhases(settings) {
+      var list = [];
+      var roundMs = settings.round * 1000;
+      var pauseMs = settings.pause * 1000;
+      var round;
+      for (round = 1; round <= settings.rounds; round++) {
+        list.push({ type: 'round', round: round, total: settings.rounds, duration: roundMs });
+        if (round < settings.rounds && pauseMs > 0) {
+          list.push({ type: 'pause', round: round, total: settings.rounds, duration: pauseMs });
+        }
+      }
+      return list;
+    }
+
+    function countdownBucket(remaining) {
+      if (remaining <= 0) return 0;
+      var sec = Math.ceil(remaining / 1000);
+      if (sec >= 1 && sec <= 3) return sec;
+      return 0;
+    }
+
+    function cueForPhase(phase, remaining, prev) {
+      var next = { minute: prev.minute, countdown: prev.countdown };
+      var events = [];
+      if (!phase || remaining <= 0) return { events: events, marks: next };
+      if (phase.type === 'round') {
+        var elapsed = phase.duration - remaining;
+        var minute = Math.floor(elapsed / 60000);
+        if (minute > prev.minute) {
+          next.minute = minute;
+          events.push('minute');
+        }
+      } else if (phase.type === 'pause') {
+        var bucket = countdownBucket(remaining);
+        if (bucket > 0 && (prev.countdown === 0 || bucket < prev.countdown)) {
+          next.countdown = bucket;
+          events.push('countdown');
+        }
+      }
+      return { events: events, marks: next };
+    }
+
+    function parseStrict(value, min, max) {
+      if (value == null) return null;
+      var text = String(value).trim().replace(',', '.');
+      if (text === '' || text === '-' || text === '.' || text === '-.') return null;
+      var n = Number(text);
+      if (!isFinite(n)) return null;
+      n = Math.round(n);
+      if (n < min || n > max) return null;
+      return n;
+    }
+
+    function clampField(value, min, max, fallback) {
+      if (value == null) return fallback;
+      var text = String(value).trim().replace(',', '.');
+      if (text === '' || text === '-' || text === '.' || text === '-.') return fallback;
+      var n = Number(text);
+      if (!isFinite(n)) return fallback;
+      n = Math.round(n);
+      if (n < min) return min;
+      if (n > max) return max;
+      return n;
+    }
+
+    function loadSettings() {
+      var settings = { rounds: DEFAULTS.rounds, round: DEFAULTS.round, pause: DEFAULTS.pause };
+      try {
+        var raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return settings;
+        var parsed = JSON.parse(raw);
+        settings.rounds = clampField(parsed.rounds, 1, 999, DEFAULTS.rounds);
+        settings.round = clampField(parsed.round, 1, 86400, DEFAULTS.round);
+        settings.pause = clampField(parsed.pause, 0, 86400, DEFAULTS.pause);
+      } catch (e) {}
+      return settings;
+    }
+
+    function saveSettings(settings) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+      } catch (e) {}
+    }
+
+    function readLoose() {
+      return {
+        rounds: parseStrict(roundsEl.value, 1, 999),
+        round: parseStrict(roundEl.value, 1, 86400),
+        pause: parseStrict(pauseEl.value, 0, 86400)
+      };
+    }
+
+    function normalizeInputs() {
+      var stored = loadSettings();
+      var settings = {
+        rounds: clampField(roundsEl.value, 1, 999, stored.rounds),
+        round: clampField(roundEl.value, 1, 86400, stored.round),
+        pause: clampField(pauseEl.value, 0, 86400, stored.pause)
+      };
+      roundsEl.value = String(settings.rounds);
+      roundEl.value = String(settings.round);
+      pauseEl.value = String(settings.pause);
+      saveSettings(settings);
+      return settings;
+    }
+
+    function audioContext() {
+      if (audioCtx) return audioCtx;
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      try {
+        audioCtx = new AC();
+      } catch (e) {
+        return null;
+      }
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 1;
+      masterGain.connect(audioCtx.destination);
+      return audioCtx;
+    }
+
+    function unlockAudio() {
+      var ctx = audioContext();
+      if (!ctx) return;
+      try { ctx.resume(); } catch (e) {}
+      try {
+        var buffer = ctx.createBuffer(1, 1, ctx.sampleRate || 22050);
+        var src = ctx.createBufferSource();
+        src.buffer = buffer;
+        src.connect(masterGain);
+        src.start(0);
+      } catch (e2) {}
+    }
+
+    function stopSounds() {
+      var list = activeOsc.splice(0, activeOsc.length);
+      var i;
+      for (i = 0; i < list.length; i++) {
+        try { list[i].stop(); } catch (e) {}
+      }
+    }
+
+    function scheduleBeep(ctx, freq, dur, when) {
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      var attack = Math.min(0.015, dur * 0.25);
+      var release = Math.min(0.03, dur * 0.3);
+      var tAttack = when + attack;
+      var tRelease = when + dur - release;
+      if (tRelease < tAttack) tRelease = tAttack;
+      var tEnd = when + dur;
+      if (tEnd <= tRelease) tEnd = tRelease + 0.005;
+      gain.gain.setValueAtTime(0.0001, when);
+      gain.gain.exponentialRampToValueAtTime(0.42, tAttack);
+      gain.gain.setValueAtTime(0.42, tRelease);
+      gain.gain.exponentialRampToValueAtTime(0.0001, tEnd);
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(when);
+      osc.stop(tEnd + 0.02);
+      activeOsc.push(osc);
+      osc.onended = function () {
+        var index = activeOsc.indexOf(osc);
+        if (index >= 0) activeOsc.splice(index, 1);
+      };
+    }
+
+    function playPattern(steps) {
+      var ctx = audioContext();
+      if (!ctx) return;
+      var run = function () {
+        var t = ctx.currentTime + 0.02;
+        var i;
+        for (i = 0; i < steps.length; i++) {
+          scheduleBeep(ctx, steps[i].freq, steps[i].dur, t);
+          t += steps[i].dur + steps[i].gap;
+        }
+      };
+      if (ctx.state === 'running') run();
+      else {
+        var pending = ctx.resume();
+        if (pending && pending.then) pending.then(run).catch(function () {});
+        else run();
+      }
+    }
+
+    function playEntry(phase) {
+      stopSounds();
+      playPattern(phase.type === 'round' ? ROUND_BEEPS : PAUSE_TONES);
+    }
+
+    function applyCue(remaining) {
+      var phase = phases[phaseIndex];
+      var result = cueForPhase(phase, remaining, marks);
+      marks = result.marks;
+      var i;
+      for (i = 0; i < result.events.length; i++) {
+        if (result.events[i] === 'minute') playPattern([{ freq: 880, dur: 0.2, gap: 0 }]);
+        if (result.events[i] === 'countdown') playPattern([{ freq: 1200, dur: 0.15, gap: 0 }]);
+      }
+    }
+
+    function ensureVideo() {
+      if (noSleepVideo) return noSleepVideo;
+      var video = document.createElement('video');
+      video.className = 'nosleep';
+      video.setAttribute('playsinline', '');
+      video.setAttribute('webkit-playsinline', '');
+      video.playsInline = true;
+      video.muted = true;
+      video.defaultMuted = true;
+      video.volume = 0;
+      video.loop = true;
+      video.preload = 'auto';
+      video.controls = false;
+      video.setAttribute('aria-hidden', 'true');
+      video.disablePictureInPicture = true;
+      video.src = NOSLEEP_SRC;
+      document.body.appendChild(video);
+      video.addEventListener('ended', function () {
+        if (!wantWake) return;
+        var pending = video.play();
+        if (pending && pending.catch) pending.catch(function () {});
+      });
+      video.addEventListener('pause', function () {
+        if (!wantWake || document.visibilityState !== 'visible') return;
+        var pending = video.play();
+        if (pending && pending.catch) pending.catch(function () {});
+      });
+      noSleepVideo = video;
+      return video;
+    }
+
+    function playNoSleep() {
+      var video = ensureVideo();
+      try {
+        var pending = video.play();
+        if (pending && pending.catch) pending.catch(function () {});
+      } catch (e) {}
+    }
+
+    function syncWake() {
+      if (!wantWake) {
+        if (noSleepVideo && !noSleepVideo.paused) noSleepVideo.pause();
+        if (wakeLock) {
+          var released = wakeLock;
+          wakeLock = null;
+          released.release().catch(function () {});
+        }
+        return;
+      }
+      playNoSleep();
+      if (wakeLock || !navigator.wakeLock || document.visibilityState !== 'visible') return;
+      navigator.wakeLock.request('screen').then(function (lock) {
+        if (!wantWake) {
+          lock.release().catch(function () {});
+          return;
+        }
+        wakeLock = lock;
+        lock.addEventListener('release', function () {
+          if (wakeLock !== lock) return;
+          wakeLock = null;
+          if (wantWake && document.visibilityState === 'visible') syncWake();
+        });
+      }).catch(function () {});
+    }
+
+    function reacquireWake() {
+      if (!wantWake) return;
+      if (!wakeLock) {
+        syncWake();
+        return;
+      }
+      var lock = wakeLock;
+      wakeLock = null;
+      lock.release().then(function () {
+        syncWake();
+      }).catch(function () {
+        syncWake();
+      });
+    }
+
+    function setMode(mode) {
+      document.documentElement.setAttribute('data-mode', mode);
+      var colors = {
+        round: '#1E8E3E',
+        pause: '#D93025',
+        idle: '#202124',
+        done: '#202124'
+      };
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', colors[mode] || colors.idle);
+    }
+
+    function announce(text) {
+      if (text === announced) return;
+      announced = text;
+      liveEl.textContent = '';
+      liveEl.textContent = text;
+    }
+
+    function updateButtons() {
+      var active = state === 'running' || state === 'paused';
+      btnStart.disabled = active;
+      btnStart.textContent = state === 'done' ? 'Nochmal starten' : 'Start';
+      btnHalt.disabled = !active;
+      btnHalt.textContent = state === 'paused' ? 'Weiter' : 'Anhalten';
+      btnSkip.disabled = !active;
+      btnReset.disabled = state === 'idle';
+    }
+
+    function updateChrome() {
+      var session = state === 'running' || state === 'paused';
+      document.body.classList.toggle('is-session', session);
+      var text = 'Bereit';
+      var sub = '';
+      var mode = 'idle';
+      if (session) {
+        var phase = phases[phaseIndex];
+        mode = phase.type === 'pause' ? 'pause' : 'round';
+        text = phase.type === 'pause'
+          ? ('Pause nach Runde ' + phase.round)
+          : ('Runde ' + phase.round + ' von ' + phase.total);
+        if (state === 'paused') sub = 'angehalten';
+      } else if (state === 'done') {
+        mode = 'done';
+        text = 'Fertig';
+      }
+      setMode(mode);
+      labelEl.textContent = text;
+      subEl.textContent = sub;
+      announce(sub ? (text + ', ' + sub) : text);
+      updateButtons();
+      requestAnimationFrame(fitTime);
+    }
+
+    function fitTime() {
+      if (fitLock) return;
+      var width = slotEl.clientWidth;
+      var height = slotEl.clientHeight;
+      if (width < 16 || height < 16) return;
+      fitLock = true;
+      var lo = 12;
+      var hi = Math.ceil(Math.max(width, height));
+      var best = lo;
+      while (lo <= hi) {
+        var mid = (lo + hi) >> 1;
+        timeEl.style.fontSize = mid + 'px';
+        if (timeEl.scrollWidth <= width && timeEl.offsetHeight <= height) {
+          best = mid;
+          lo = mid + 1;
+        } else {
+          hi = mid - 1;
+        }
+      }
+      timeEl.style.fontSize = best + 'px';
+      fitTime.scale(width, height);
+      fitLock = false;
+    }
+
+    fitTime.scale = function (width, height) {
+      timeEl.style.transform = 'none';
+      var textWidth = timeEl.scrollWidth;
+      var textHeight = timeEl.offsetHeight;
+      if (textWidth < 1 || textHeight < 1) return;
+      var scaleX = width / textWidth;
+      var scaleY = height / textHeight;
+      if (scaleX < 1.02) scaleX = 1;
+      if (scaleY < 1.02) scaleY = 1;
+      if (scaleX > 1.12) scaleX = 1.12;
+      if (scaleY > 1.45) scaleY = 1.45;
+      if (scaleX === 1 && scaleY === 1) return;
+      timeEl.style.transformOrigin = 'center center';
+      timeEl.style.transform = 'scale(' + scaleX.toFixed(3) + ',' + scaleY.toFixed(3) + ')';
+    };
+
+    function renderTime(ms, progress) {
+      var text = formatMs(ms);
+      if (timeEl.textContent !== text) {
+        timeEl.textContent = text;
+        timeEl.setAttribute('aria-label', spokenTime(ms));
+        fitTime();
+      }
+      var clamped = progress < 0 ? 0 : (progress > 1 ? 1 : progress);
+      fillEl.style.width = (clamped * 100) + '%';
+      var pct = Math.round(clamped * 100);
+      if (pct !== barPct) {
+        barPct = pct;
+        barEl.setAttribute('aria-valuenow', String(pct));
+      }
+      var title = (state === 'running' || state === 'paused')
+        ? (text + ' · ' + labelEl.textContent)
+        : 'Timer';
+      if (document.title !== title) document.title = title;
+    }
+
+    function progressOf(remaining) {
+      var phase = phases[phaseIndex];
+      if (!phase || !phase.duration) return 0;
+      var elapsed = phase.duration - remaining;
+      var ratio = elapsed / phase.duration;
+      if (ratio < 0) return 0;
+      if (ratio > 1) return 1;
+      return ratio;
+    }
+
+    function remainingNow() {
+      if (state === 'paused') return pausedRemaining;
+      return Math.max(0, phaseEndsAt - Date.now());
+    }
+
+    function enterPhase(playSound) {
+      var phase = phases[phaseIndex];
+      var remaining = remainingNow();
+      var elapsed = phase.duration - remaining;
+      if (elapsed < 0) elapsed = 0;
+      marks = { minute: Math.floor(elapsed / 60000), countdown: 0 };
+      updateChrome();
+      if (playSound) playEntry(phase);
+      applyCue(remaining);
+      renderTime(remaining, progressOf(remaining));
+      if (state === 'running') reacquireWake();
+    }
+
+    function finish() {
+      state = 'done';
+      wantWake = false;
+      syncWake();
+      stopLoop();
+      stopSounds();
+      playPattern(DONE_TONES);
+      updateChrome();
+      renderTime(0, 1);
+    }
+
+    function advance(now) {
+      var guard = 0;
+      while (now >= phaseEndsAt && guard < 10000) {
+        guard++;
+        phaseIndex++;
+        if (phaseIndex >= phases.length) {
+          finish();
+          return;
+        }
+        phaseEndsAt += phases[phaseIndex].duration;
+      }
+      if (state === 'running') enterPhase(true);
+    }
+
+    function tick() {
+      if (state !== 'running') return;
+      var now = Date.now();
+      if (now >= phaseEndsAt) {
+        advance(now);
+        return;
+      }
+      var remaining = phaseEndsAt - now;
+      applyCue(remaining);
+      renderTime(remaining, progressOf(remaining));
+    }
+
+    function startLoop() {
+      stopLoop();
+      var frame = function () {
+        if (state !== 'running') return;
+        tick();
+        rafId = requestAnimationFrame(frame);
+      };
+      rafId = requestAnimationFrame(frame);
+      intervalId = setInterval(function () {
+        if (state === 'running') tick();
+      }, 200);
+    }
+
+    function stopLoop() {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = 0;
+      if (intervalId) clearInterval(intervalId);
+      intervalId = 0;
+    }
+
+    function showIdle() {
+      state = 'idle';
+      phases = [];
+      phaseIndex = 0;
+      wantWake = false;
+      syncWake();
+      stopLoop();
+      stopSounds();
+      updateChrome();
+      var settings = loadSettings();
+      renderTime(settings.round * 1000, 0);
+    }
+
+    function startWorkout() {
+      if (state === 'running' || state === 'paused') return;
+      var settings = normalizeInputs();
+      phases = buildPhases(settings);
+      if (!phases.length) return;
+      unlockAudio();
+      wantWake = true;
+      playNoSleep();
+      phaseIndex = 0;
+      phaseEndsAt = Date.now() + phases[0].duration;
+      state = 'running';
+      enterPhase(true);
+      startLoop();
+    }
+
+    function halt() {
+      if (state !== 'running') return;
+      pausedRemaining = Math.max(0, phaseEndsAt - Date.now());
+      state = 'paused';
+      wantWake = false;
+      syncWake();
+      stopLoop();
+      stopSounds();
+      updateChrome();
+      renderTime(pausedRemaining, progressOf(pausedRemaining));
+    }
+
+    function resume() {
+      if (state !== 'paused') return;
+      unlockAudio();
+      wantWake = true;
+      playNoSleep();
+      phaseEndsAt = Date.now() + pausedRemaining;
+      state = 'running';
+      syncWake();
+      startLoop();
+      updateChrome();
+      tick();
+    }
+
+    function skipPhase() {
+      if (state !== 'running' && state !== 'paused') return;
+      if (phaseIndex + 1 >= phases.length) {
+        finish();
+        return;
+      }
+      phaseIndex++;
+      var duration = phases[phaseIndex].duration;
+      if (state === 'paused') pausedRemaining = duration;
+      else phaseEndsAt = Date.now() + duration;
+      enterPhase(true);
+    }
+
+    function resetWorkout() {
+      if (state === 'idle') return;
+      showIdle();
+    }
+
+    function testSound() {
+      unlockAudio();
+      stopSounds();
+      playPattern([
+        { freq: 1040, dur: 0.15, gap: 0.1 },
+        { freq: 1040, dur: 0.15, gap: 0.2 },
+        { freq: 880, dur: 0.2, gap: 0.2 },
+        { freq: 1200, dur: 0.15, gap: 0.2 },
+        { freq: 520, dur: 0.5, gap: 0.18 },
+        { freq: 660, dur: 0.5, gap: 0 }
+      ]);
+    }
+
+    function onFieldInput() {
+      var loose = readLoose();
+      if (loose.rounds == null || loose.round == null || loose.pause == null) return;
+      var settings = { rounds: loose.rounds, round: loose.round, pause: loose.pause };
+      saveSettings(settings);
+      if (state === 'idle') renderTime(settings.round * 1000, 0);
+    }
+
+    function onFieldBlur() {
+      var settings = normalizeInputs();
+      if (state === 'idle') renderTime(settings.round * 1000, 0);
+    }
+
+    function syncViewport() {
+      var viewport = window.visualViewport;
+      if (!viewport) return;
+      document.body.style.height = viewport.height + 'px';
+      document.body.style.top = viewport.offsetTop + 'px';
+      fitTime();
+    }
+
+    function onVisibility() {
+      if (document.visibilityState !== 'visible') return;
+      if (wantWake) syncWake();
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(function () {});
+      }
+      if (state === 'running') tick();
+    }
+
+    btnStart.addEventListener('click', startWorkout);
+    btnHalt.addEventListener('click', function () {
+      if (state === 'running') halt();
+      else if (state === 'paused') resume();
+    });
+    btnSkip.addEventListener('click', skipPhase);
+    btnReset.addEventListener('click', resetWorkout);
+    btnTest.addEventListener('click', testSound);
+    function selectOnFocus(event) {
+      var el = event.target;
+      try { el.select(); } catch (e) {}
+      setTimeout(function () {
+        try { el.select(); } catch (e2) {}
+      }, 0);
+    }
+    roundsEl.addEventListener('focus', selectOnFocus);
+    roundEl.addEventListener('focus', selectOnFocus);
+    pauseEl.addEventListener('focus', selectOnFocus);
+    roundsEl.addEventListener('input', onFieldInput);
+    roundEl.addEventListener('input', onFieldInput);
+    pauseEl.addEventListener('input', onFieldInput);
+    roundsEl.addEventListener('blur', onFieldBlur);
+    roundEl.addEventListener('blur', onFieldBlur);
+    pauseEl.addEventListener('blur', onFieldBlur);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('resize', fitTime);
+    window.addEventListener('orientationchange', function () {
+      setTimeout(fitTime, 180);
+    });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', syncViewport);
+      window.visualViewport.addEventListener('scroll', syncViewport);
+    }
+    if (window.ResizeObserver) {
+      new ResizeObserver(function () { fitTime(); }).observe(slotEl);
+    }
+
+    var initial = loadSettings();
+    roundsEl.value = String(initial.rounds);
+    roundEl.value = String(initial.round);
+    pauseEl.value = String(initial.pause);
+    ensureVideo();
+    showIdle();
+    syncViewport();
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(function () {});
+    }
+  </script>
+</body>
+</html>
