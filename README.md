@@ -1,1 +1,1 @@
-# geo6996.github.io.
+# geo6996.github.io
